@@ -1,15 +1,6 @@
-#make: main.o
-#	gcc -o make main.o
-#main.o: main.c
-#	gcc -c -ggdb main.c
-#
-#clean:
-#	rm *.o make
-
-
 TARGET = xs_shell
 
-SRC = main.c
+SRC = ./src/main.c
 OBJ = $(SRC:%.c=%.o)
 INC = ./
 
