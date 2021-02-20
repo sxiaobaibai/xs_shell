@@ -1,4 +1,5 @@
 # Sxiaobaibai's shell (xs_shell)
+This is my simple shell build through a project. This shell is written in C language.
 
 ## abstract
 function
@@ -34,3 +35,9 @@ $: cat $(path to file)
 ```
 $: cat $(path to file) | grep $(search keyword) > $(output file name for keyword search in the file)
 ```
+
+- quit
+```
+$: exit
+```
+or just press Ctrl + D
