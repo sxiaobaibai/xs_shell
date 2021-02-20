@@ -13,3 +13,24 @@ function
 make
 ./xs_shell
 ```
+
+## how to use
+- list directory
+```
+$: ls
+```
+- change directory
+```
+$: cd ..
+$: cd ~
+$: cd /
+```
+- execute cat command
+```
+$: cat $(path to file)
+```
+
+- redirect and pipe
+```
+$: cat $(path to file) | grep $(search keyword) > $(output file name for keyword search in the file)
+```
