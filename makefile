@@ -13,10 +13,7 @@ CXX = g++
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET)
-
-$(OBJ): $(SRC)
-	$(CC) -c $(SRC)
+	$(CC) $^ -o $@
 
 clean:
 	$(RM) $(TARGET)

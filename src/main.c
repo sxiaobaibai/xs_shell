@@ -22,9 +22,6 @@ int main(void){
 	char *argv[NARGS];
 	char *argv_aug[NARGS][NARGS];
 
-	char *argv_a[10];
-	char *argv_b[10];
-
 	int flag=0;
 	int flag2=0;
 	int argc=0;
@@ -32,11 +29,8 @@ int main(void){
 	int j=0;
 	int stat[20];
 	int status;
-	int exit_stat=0;
-	int cnt;
 	int pipboder[10]={0};
 	int pipboder2[10]={0};
-	int pfd[2];
 	int pfd1[2];
 	int pfd2[2];
 
@@ -260,7 +254,7 @@ void getargs_aug(char *p, char *lbuf2){
 			lbuf2++;
 			*lbuf2=' ';
 		}
-		*lbuf2++;
+		lbuf2++;
 		p++;
 	}
 }
