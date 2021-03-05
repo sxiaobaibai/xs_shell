@@ -1,42 +1,8 @@
 #include "listen_input.h"
 
 #define COMMAND_BUF 256
-#define NUMPIPEARGS 256
 
-//char *get_str_until_delim(char delim, char **buf)
-//{
-//  int len;
-//  char *ret;
-//
-//  len = 0;
-//  while ((*buf)[len] && (*buf)[len] != delim)
-//    len++;
-//  ret = malloc(sizeof(char) * (len + 1));
-//  strncpy(ret, *buf, len + 1);
-//  ret[len] = '\0';
-//  *buf += len;
-//  return ret;
-//}
-//
-//int is_redirect(char *buf)
-//{
-//  if (*buf == '|' || *buf == '>' ||  *buf == '<')
-//  {
-//    return (1);
-//  }
-//  return (0);
-//}
-//
-//char *skip_blank(char *str)
-//{
-//  while (*str && *str == ' ')
-//  {
-//    str++;
-//  }
-//  return str;
-//}
-
-int execute_command_in_new_process(char **command)
+static int execute_command(char **command)
 {
   int status;
   pid_t pid;
@@ -45,24 +11,13 @@ int execute_command_in_new_process(char **command)
   if(0 == pid){
     signal(SIGINT,SIG_DFL);
     execvp(command[0],command);
-    wait(&status);
-    exit(0);
+    fprintf(stderr, "xs_shell: command not found: %s\n", command[0]);
+    exit(1);
   }else if(pid > 0){
     wait(&status);
   }else if(pid < 0){
     perror("fork");
     exit(EXIT_FAILURE);
-  }
-  return (0);
-}
-
-int is_c_in_str(char c, const char *str)
-{
-  while (*str)
-  {
-    if (c == *str)
-      return (1);
-    str++;
   }
   return (0);
 }
@@ -92,6 +47,24 @@ static char			**free_all(char **pp)
 				free(*head);
 				*head = NULL;
 			}
+			head++;
+		}
+		free(pp);
+	}
+	return (NULL);
+}
+
+static char			***free_three(char ***pp)
+{
+	char ***head;
+
+	head = pp;
+	if (pp != NULL)
+	{
+		while (*head)
+		{
+      free_all(*head);
+      *head = NULL;
 			head++;
 		}
 		free(pp);
@@ -157,7 +130,7 @@ static size_t		calc_non_zero_item_size(char const *src, const char delim)
 	return (++size);
 }
 
-char **split_by_delim(const char *src, char delim, size_t *num_items)
+static char **split_by_delim(const char *src, char delim, size_t *num_items)
 {
   /*
   Caution: the returned char* vector will be NULL terminated
@@ -188,7 +161,7 @@ char **split_by_delim(const char *src, char delim, size_t *num_items)
 	return (split);
 }
 
-char **split_by_continuos_delim(const char *src, char delim, size_t *num_items)
+static char **split_by_continuos_delim(const char *src, char delim, size_t *num_items)
 {
   /*
   Caution: a||b will be counted as 2 commands -> 'a', 'b'
@@ -219,50 +192,111 @@ char **split_by_continuos_delim(const char *src, char delim, size_t *num_items)
 	return (split);
 }
 
-ssize_t listen_input(const char *prompt)
+static void recursive_multi_pipe(int step, char ***piped_argv)
 {
-  // if error return -1;
-  char buf_input[COMMAND_BUF];
-  //char *piped_argv[NUMPIPEARGS];
-  char **piped_argv;
-  size_t num_pipe_items;
+  int pipe_fd[2];
+  pid_t pid;
+  signal(SIGINT,SIG_DFL);
 
-  fputs(prompt, stdout);
-
-  // get a line (batch)
-  // ToDo tab complition
-  fgets(buf_input, sizeof(buf_input), stdin);
-  buf_input[strlen(buf_input) - 1] = '\0';
-
-  // pipe seperation
-  // Caution: |||||| -> output is wierd.
-  piped_argv = split_by_delim(buf_input, '|', &num_pipe_items);
-  int i = 0;
-  while (piped_argv[i])
+  if (step == 0)
   {
-    printf("pipe: %d / %zu, %s\n", i, num_pipe_items, piped_argv[i]);
-    i++;
-  }
-  // execute command
-  if (num_pipe_items == 1)
-  {
-    char **command;
-    size_t cnt_command;
-    // ToDo: delim should be based on isBlank.
-    command = split_by_continuos_delim(piped_argv[0], ' ', &cnt_command);
-    execute_command_in_new_process(command);
-    free_all(command);
-  }
-  else if (num_pipe_items > 1)
-  {
-
+    execvp(piped_argv[step][0], piped_argv[step]);
+    fprintf(stderr, "xs_shell: command not found: %s\n", piped_argv[step][0]);
   }
   else
   {
-    return (-1);
+    pipe(pipe_fd);
+    pid = fork();
+    if (pid == 0)
+    {
+      close(pipe_fd[0]);
+      dup2(pipe_fd[1], 1);
+      close(pipe_fd[1]);
+      recursive_multi_pipe(step - 1, piped_argv);
+    }
+    else if (pid > 0)
+    {
+      close(pipe_fd[1]);
+      dup2(pipe_fd[0], 0);
+      close(pipe_fd[0]);
+      signal(SIGINT,SIG_DFL);
+      execvp(piped_argv[step][0], piped_argv[step]);
+      fprintf(stderr, "xs_shell: command not found: %s\n", piped_argv[step][0]);
+      exit(1);
+    }
+    else if(pid < 0)
+    {
+      perror("fork");
+      exit(EXIT_FAILURE);
+    }
   }
+}
 
-  // post process for memory allocation
-  free_all(piped_argv);
+static int execute_piped_command(char ***commands, size_t num_pipe_items)
+{
+  int status;
+  pid_t pid;
+
+  int pipe_fd[2];
+  pipe(pipe_fd);
+  if ((pid = fork()) == 0)
+  {
+    close(pipe_fd[1]);
+    dup2(pipe_fd[0], 0);
+    close(pipe_fd[0]);
+    recursive_multi_pipe(num_pipe_items - 1, commands);
+  }
+  else if (pid > 0)
+  {
+    close(pipe_fd[1]);
+    close(pipe_fd[0]);
+    for (size_t i = 0; i < num_pipe_items - 1; i++) {
+      wait(&status);
+    }
+  }
+  else if (pid < 0)
+  {
+    perror("fork");
+    exit(EXIT_FAILURE);
+  }
+  return (0);
+}
+
+static char ***parse_into_piped_vectors(char *str, size_t *num_pipe_items)
+{
+  char **piped_items;
+  char ***commands;
+  size_t cnt_command;
+
+  // pipe seperation
+  // Caution: |||||| -> output is wierd.
+  piped_items = split_by_delim(str, '|', num_pipe_items);
+  commands = malloc(sizeof(char***) * (*num_pipe_items + 1));
+  for (size_t i = 0; i < *num_pipe_items; i++)
+    commands[i] = split_by_continuos_delim(piped_items[i], ' ', &cnt_command);
+  commands[*num_pipe_items] = NULL;
+  free_all(piped_items);
+  return (commands);
+}
+
+ssize_t listen_input(const char *prompt)
+{
+  char buf_input[COMMAND_BUF];
+  char ***piped_items;
+  size_t num_pipe_items;
+
+  // ToDo tab complition
+  fputs(prompt, stdout);
+  fgets(buf_input, sizeof(buf_input), stdin);
+  buf_input[strlen(buf_input) - 1] = '\0';
+
+  piped_items = parse_into_piped_vectors(buf_input, &num_pipe_items);
+  if (num_pipe_items == 1)
+    execute_command(piped_items[0]);
+  else if (num_pipe_items > 1)
+    execute_piped_command(piped_items, num_pipe_items);
+  else
+    return (-1);
+  free_three(piped_items);
   return (0);
 }
