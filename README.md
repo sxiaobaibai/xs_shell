@@ -20,7 +20,7 @@ make
 ```
 $: ls
 ```
-- change directory
+- ~~change directory~~
 ```
 $: cd ..
 $: cd ~
@@ -31,12 +31,13 @@ $: cd /
 $: cat $(path to file)
 ```
 
-- redirect and pipe
+- ~~redirect and pipe~~(worked in older version)
+- pipe
 ```
-$: cat $(path to file) | grep $(search keyword) > $(output file name for keyword search in the file)
+$: ls | cat | wc -l
 ```
 
-- quit
+- ~~quit~~
 ```
 $: exit
 ```
