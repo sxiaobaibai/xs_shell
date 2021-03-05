@@ -20,7 +20,7 @@ make
 ```
 $: ls
 ```
-- ~~change directory~~
+- change directory
 ```
 $: cd ..
 $: cd ~
@@ -37,7 +37,7 @@ $: cat $(path to file)
 $: ls | cat | wc -l
 ```
 
-- ~~quit~~
+- quit
 ```
 $: exit
 ```
