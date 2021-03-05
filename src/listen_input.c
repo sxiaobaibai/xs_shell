@@ -1,6 +1,7 @@
 #include "listen_input.h"
 
 #define COMMAND_BUF 256
+#define MAX_DIR_LEN 128
 
 int is_buildin(char *cmd)
 {
@@ -25,12 +26,28 @@ int execute_buildin(char **cmd)
     size++;
   if (strcmp(*cmd, "cd") == 0)
   {
+    //usage: "cd ~"  "cd ~/dir" "cd /home" "cd ../dir" "cd ./dir" "cd"
     if (size > 2)
       fprintf(stderr, "too many arguments for cd command.\n");
     if (size == 1)
       chdir(getenv("HOME"));
     else if (size == 2)
-      chdir(cmd[1]);
+    {
+      if (cmd[1][0] == '~')
+      {
+        char absolute_dir[MAX_DIR_LEN] = "";
+        strncpy(absolute_dir, getenv("HOME"), MAX_DIR_LEN - 1);//leave one space for \0.
+        if (strlen(absolute_dir) < MAX_DIR_LEN - 1)//leave one space for \0.
+        {
+          absolute_dir[strlen(absolute_dir)] = '/';
+          absolute_dir[strlen(absolute_dir) + 1] = '\0';
+          strlcat(absolute_dir, &cmd[1][1], MAX_DIR_LEN);
+          chdir(absolute_dir);
+        }
+      }
+      else
+        chdir(cmd[1]);
+    }
   }
   if (strcmp(*cmd, "exit") == 0)
   {
