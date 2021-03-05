@@ -1,7 +1,7 @@
 TARGET = xs_shell
 
+#SRC = ./src/test.c
 SRC = ./src/main.c
-#SRC += ./src/shell.c
 SRC += ./src/listen_input.c
 OBJ = $(SRC:%.c=%.o)
 INC = ./inc

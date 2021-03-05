@@ -2,22 +2,74 @@
 
 #define COMMAND_BUF 256
 
+int is_buildin(char *cmd)
+{
+  if (!cmd)
+    return (0);
+
+  if (strcmp(cmd, "cd") == 0)
+    return (1);
+  if (strcmp(cmd, "echo") == 0)
+    return (1);
+  if (strcmp(cmd, "exit") == 0)
+    return (1);
+  return (0);
+}
+
+int execute_buildin(char **cmd)
+{
+  size_t size;
+
+  size = 0;
+  while (cmd[size])
+    size++;
+  if (strcmp(*cmd, "cd") == 0)
+  {
+    if (size > 2)
+      fprintf(stderr, "too many arguments for cd command.\n");
+    if (size == 1)
+      chdir(getenv("HOME"));
+    else if (size == 2)
+      chdir(cmd[1]);
+  }
+  if (strcmp(*cmd, "exit") == 0)
+  {
+    exit(0);
+  }
+  return (0);
+}
+
 static int execute_command(char **command)
 {
   int status;
   pid_t pid;
 
-  pid = fork();
-  if(0 == pid){
-    signal(SIGINT,SIG_DFL);
-    execvp(command[0],command);
-    fprintf(stderr, "xs_shell: command not found: %s\n", command[0]);
-    exit(1);
-  }else if(pid > 0){
-    wait(&status);
-  }else if(pid < 0){
-    perror("fork");
-    exit(EXIT_FAILURE);
+  if (is_buildin(*command))
+  {
+    if (execute_buildin(command) != 0)
+    {
+      fprintf(stderr, "error with command: %s\n", *command);
+      exit(1);
+    }
+  }
+  else
+  {
+    pid = fork();
+    if(0 == pid){
+      signal(SIGINT,SIG_DFL);
+      execvp(command[0],command);
+      fprintf(stderr, "xs_shell: command not found: %s\n", command[0]);
+      exit(1);
+    }
+    else if(pid > 0)
+    {
+      wait(&status);
+    }
+    else if(pid < 0)
+    {
+      perror("fork");
+      exit(EXIT_FAILURE);
+    }
   }
   return (0);
 }
@@ -164,7 +216,7 @@ static char **split_by_delim(const char *src, char delim, size_t *num_items)
 static char **split_by_continuos_delim(const char *src, char delim, size_t *num_items)
 {
   /*
-  Caution: a||b will be counted as 2 commands -> 'a', 'b'
+  Caution: a|||||b will be counted as 2 commands -> 'a', 'b'
   */
   size_t size;
 	const char	*head;
@@ -196,10 +248,10 @@ static void recursive_multi_pipe(int step, char ***piped_argv)
 {
   int pipe_fd[2];
   pid_t pid;
-  signal(SIGINT,SIG_DFL);
 
   if (step == 0)
   {
+    signal(SIGINT,SIG_DFL);
     execvp(piped_argv[step][0], piped_argv[step]);
     fprintf(stderr, "xs_shell: command not found: %s\n", piped_argv[step][0]);
   }
@@ -269,7 +321,7 @@ static char ***parse_into_piped_vectors(char *str, size_t *num_pipe_items)
   size_t cnt_command;
 
   // pipe seperation
-  // Caution: |||||| -> output is wierd.
+  // Caution: when input is as "||||||" -> output becomes wierd.
   piped_items = split_by_delim(str, '|', num_pipe_items);
   commands = malloc(sizeof(char***) * (*num_pipe_items + 1));
   for (size_t i = 0; i < *num_pipe_items; i++)
