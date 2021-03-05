@@ -1,8 +1,10 @@
 TARGET = xs_shell
 
 SRC = ./src/main.c
+#SRC += ./src/shell.c
+SRC += ./src/listen_input.c
 OBJ = $(SRC:%.c=%.o)
-INC = ./
+INC = ./inc
 
 CFLAGS = -I $(INC)
 CFLAGS += -Wall -Werror -Wextra
