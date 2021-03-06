@@ -7,7 +7,7 @@ OBJ = $(SRC:%.c=%.o)
 INC = ./inc
 
 CFLAGS = -I $(INC)
-CFLAGS += -Wall -Werror -Wextra
+#CFLAGS += -Wall -Werror -Wextra
 
 CC = gcc
 CXX = g++

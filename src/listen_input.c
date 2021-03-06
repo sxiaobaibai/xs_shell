@@ -1,7 +1,10 @@
 #include "listen_input.h"
+#include <ctype.h>
+#include <fcntl.h>
 
 #define COMMAND_BUF 256
 #define MAX_DIR_LEN 128
+#define MAX_FILENAME_LEN 128
 
 int is_buildin(char *cmd)
 {
@@ -56,7 +59,126 @@ int execute_buildin(char **cmd)
   return (0);
 }
 
+//static int execute_command_(char **command)
+//{
+//  char **head;
+//  int i;
+//  //int in_fd;
+//  //int out_fd;
+//
+//  head = command;
+//  i = 0;
+//  while (command[i])
+//  {
+//    if(command[i][0] == '>' || command[i][0] == '<')
+//    {
+//      exit(0);
+//    }
+//    i++;
+//  }
+//  signal(SIGINT,SIG_DFL);
+//  execvp(command[0], command);
+//  return 0;
+//}
+
+char *set_file_for_redirect(char *filename, char *src)
+{
+  int i;
+
+  while (*src)
+    if (isblank(*src))
+      src++;
+    else
+      break ;
+  i = 0;
+  while (*src)
+  {
+    if (!isblank(*src) && *src != '<' && *src != '>')
+      filename[i] = *src;
+    else
+      break ;
+    src++;
+    i++;
+  }
+  filename[i] = '\0';
+  return (src);
+}
+
+static int set_redirect(int *fd, char *src)
+{
+  char filename[MAX_FILENAME_LEN];
+
+  while (*src)
+  {
+    if (fd[1] == -1 && strncmp(src, ">>", 2) == 0)
+    {
+      src = set_file_for_redirect(filename, src + 2);
+      if ((fd[1] = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644)) < 0)
+        return (-1);
+    }
+    if (fd[1] == -1 && strncmp(src, ">", 1) == 0)
+    {
+      src = set_file_for_redirect(filename, src + 1);
+      if ((fd[1] = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
+        return (-1);
+    }
+    else if (*src == '<')
+    {
+      src = set_file_for_redirect(filename, src + 1);
+      if ((fd[0] = open(filename, O_RDONLY)) < 0)
+      {
+        fprintf(stderr, "xs: no such file or directory: %s\n", filename);
+        return (-1);
+      }
+    }
+    else
+    {
+      src++;
+    }
+  }
+  return (0);//if error -> return -1;
+}
+
 static int execute_command(char **command)
+{
+  int i;
+  int redirect_fd[2];
+  /*
+  0: input fd(file descriptor),
+  1: output fd
+  */
+
+  redirect_fd[0] = -1;
+  redirect_fd[1] = -1;
+  i = 0;
+  while (command[i])
+  {
+    if (*command[i] == '>' || *command[i] == '<')
+    {
+      if (set_redirect(redirect_fd, command[i]) == -1)
+      {
+        command[i] = NULL;
+        free(command[i + 1]);
+        exit(-1);
+      }
+      command[i] = NULL;
+      free(command[i + 1]);
+      break ;
+    }
+    i++;
+  }
+  for (int j = 0; j < 2; ++j)
+    if (redirect_fd[j] >= 0)
+      dup2(redirect_fd[j], j);
+  signal(SIGINT,SIG_DFL);
+  execvp(command[0],command);
+
+  fprintf(stderr, "xs: command not found: %s\n", command[0]);
+  exit(1);
+  return (0);
+}
+
+static int execute_non_piped_command(char **command)
 {
   int status;
   pid_t pid;
@@ -73,9 +195,10 @@ static int execute_command(char **command)
   {
     pid = fork();
     if(0 == pid){
-      signal(SIGINT,SIG_DFL);
-      execvp(command[0],command);
-      fprintf(stderr, "xs_shell: command not found: %s\n", command[0]);
+
+      execute_command(command);
+
+      fprintf(stderr, "xs: command not found: %s\n", command[0]);
       exit(1);
     }
     else if(pid > 0)
@@ -152,6 +275,17 @@ static const char	*next(char const *src, const char delim)
 	return (src);
 }
 
+static const char	*next_delim_or_redirect(char const *src, const char delim)
+{
+	while (*src)
+	{
+		if (*src == delim || *src == '>' || *src == '<')
+			break ;
+		src++;
+	}
+	return (src);
+}
+
 static size_t		calc_size(char const *src, const char delim)
 {
   /*
@@ -176,12 +310,35 @@ static size_t		calc_size(char const *src, const char delim)
 	return (size);
 }
 
-static size_t		calc_non_zero_item_size(char const *src, const char delim)
+//static size_t		calc_non_zero_item_size(char const *src, const char delim)
+//{
+//  /*
+//  Caution: calculate how many elements is seperated by the delim character.
+//  Caution: if delim continus, skip all continous delims.
+//  a|b||c -> return 3
+//  */
+//	size_t size;
+//
+//	size = 0;
+//	if (!*(src = skip(src, delim)))
+//		return (0);
+//	while (*src)
+//	{
+//		if (*src++ == delim)
+//		{
+//			src++;
+//			size++;
+//		}
+//	}
+//	return (++size);
+//}
+
+static size_t		calc_sizeof_cmds_and_redirect(char const *src, const char delim)
 {
   /*
   Caution: calculate how many elements is seperated by the delim character.
   Caution: if delim continus, skip all continous delims.
-  a|b||c -> return 3
+  a|b||c<a__ -> return 4 (a,b,c,<a__)
   */
 	size_t size;
 
@@ -190,11 +347,15 @@ static size_t		calc_non_zero_item_size(char const *src, const char delim)
 		return (0);
 	while (*src)
 	{
-		if (*src++ == delim)
-		{
-			src++;
-			size++;
-		}
+    while (*src && *src != delim && *src != '>' && *src != '<')
+      src++;
+    size++;
+    src = skip(src, delim);
+    if (*src == '>' || *src == '<')
+    {
+      size++;
+      break ;
+    }
 	}
 	return (++size);
 }
@@ -230,7 +391,7 @@ static char **split_by_delim(const char *src, char delim, size_t *num_items)
 	return (split);
 }
 
-static char **split_by_continuos_delim(const char *src, char delim, size_t *num_items)
+static char **split_to_commands_and_redirect(const char *src, char delim, size_t *num_items)
 {
   /*
   Caution: a|||||b will be counted as 2 commands -> 'a', 'b'
@@ -242,35 +403,77 @@ static char **split_by_continuos_delim(const char *src, char delim, size_t *num_
 
 	if (src == NULL)
 		return (NULL);
-	size = calc_non_zero_item_size(src, delim);
+	size = calc_sizeof_cmds_and_redirect(src, delim);
 	if ((split = (char **)malloc(sizeof(char *) * (size + 1))) == NULL)
 		return (NULL);
 	split_head = split;
 	src = skip(src, delim);
 	while (*src)
 	{
-		head = next(src, delim);
+		head = next_delim_or_redirect(src, delim);
 		if ((*split_head = malloc(sizeof(char) * (head - src + 1))) == NULL)
 			return (free_all(split));
 		strlcpy(*split_head, src, head - src + 1);
 		split_head++;
 		src = skip(head, delim);
+    if (*src == '>' || *src == '<' )
+    {
+      size_t head_size = strlen(src) + 1;
+		  if ((*split_head = malloc(sizeof(char) * (strlen(src) + 1))) == NULL)
+		  	return (free_all(split));
+		  strlcpy(*split_head, src, head_size);
+		  split_head++;
+      break ;
+    }
 	}
 	*split_head = NULL;
   *num_items = size;
 	return (split);
 }
 
+//static char **split_by_continuos_delim(const char *src, char delim, size_t *num_items)
+//{
+//  /*
+//  Caution: a|||||b will be counted as 2 commands -> 'a', 'b'
+//  */
+//  size_t size;
+//	const char	*head;
+//	char		**split;
+//	char		**split_head;
+//
+//	if (src == NULL)
+//		return (NULL);
+//	size = calc_non_zero_item_size(src, delim);
+//	if ((split = (char **)malloc(sizeof(char *) * (size + 1))) == NULL)
+//		return (NULL);
+//	split_head = split;
+//	src = skip(src, delim);
+//	while (*src)
+//	{
+//		head = next(src, delim);
+//		if ((*split_head = malloc(sizeof(char) * (head - src + 1))) == NULL)
+//			return (free_all(split));
+//		strlcpy(*split_head, src, head - src + 1);
+//		split_head++;
+//		src = skip(head, delim);
+//	}
+//	*split_head = NULL;
+//  *num_items = size;
+//	return (split);
+//}
+
 static void recursive_multi_pipe(int step, char ***piped_argv)
 {
   int pipe_fd[2];
   pid_t pid;
+  int status;
 
   if (step == 0)
   {
-    signal(SIGINT,SIG_DFL);
-    execvp(piped_argv[step][0], piped_argv[step]);
-    fprintf(stderr, "xs_shell: command not found: %s\n", piped_argv[step][0]);
+
+    //execute_command
+    execute_command(piped_argv[step]);
+    fprintf(stderr, "xs: command not found: %s\n", piped_argv[step][0]);
   }
   else
   {
@@ -288,9 +491,10 @@ static void recursive_multi_pipe(int step, char ***piped_argv)
       close(pipe_fd[1]);
       dup2(pipe_fd[0], 0);
       close(pipe_fd[0]);
-      signal(SIGINT,SIG_DFL);
-      execvp(piped_argv[step][0], piped_argv[step]);
-      fprintf(stderr, "xs_shell: command not found: %s\n", piped_argv[step][0]);
+
+      wait(&status);
+      execute_command(piped_argv[step]);
+      fprintf(stderr, "xs: command not found: %s\n", piped_argv[step][0]);
       exit(1);
     }
     else if(pid < 0)
@@ -319,9 +523,10 @@ static int execute_piped_command(char ***commands, size_t num_pipe_items)
   {
     close(pipe_fd[1]);
     close(pipe_fd[0]);
-    for (size_t i = 0; i < num_pipe_items - 1; i++) {
-      wait(&status);
-    }
+    wait(&status);
+    //for (size_t i = 0; i < num_pipe_items - 1; i++) {
+    //  wait(&status);
+    //}
   }
   else if (pid < 0)
   {
@@ -342,7 +547,8 @@ static char ***parse_into_piped_vectors(char *str, size_t *num_pipe_items)
   piped_items = split_by_delim(str, '|', num_pipe_items);
   commands = malloc(sizeof(char***) * (*num_pipe_items + 1));
   for (size_t i = 0; i < *num_pipe_items; i++)
-    commands[i] = split_by_continuos_delim(piped_items[i], ' ', &cnt_command);
+    commands[i] = split_to_commands_and_redirect(piped_items[i], ' ', &cnt_command);
+    //commands[i] = split_by_continuos_delim(piped_items[i], ' ', &cnt_command);
   commands[*num_pipe_items] = NULL;
   free_all(piped_items);
   return (commands);
@@ -360,8 +566,9 @@ ssize_t listen_input(const char *prompt)
   buf_input[strlen(buf_input) - 1] = '\0';
 
   piped_items = parse_into_piped_vectors(buf_input, &num_pipe_items);
+
   if (num_pipe_items == 1)
-    execute_command(piped_items[0]);
+    execute_non_piped_command(piped_items[0]);
   else if (num_pipe_items > 1)
     execute_piped_command(piped_items, num_pipe_items);
   else
