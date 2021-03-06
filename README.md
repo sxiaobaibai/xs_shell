@@ -6,39 +6,45 @@ function
 - execute command whose binary file is located in $PATH
 - shell build in command
 	- cd
+	- exit
 - pipe
 - redirect
-
 ## how to build
 ```
 make
+```
+## Example of how to use
+- start the shell
+```
 ./xs_shell
 ```
-
-## how to use
 - list directory
 ```
-$: ls
+$ ls
 ```
 - change directory
 ```
-$: cd ..
-$: cd ~
-$: cd /
+$ cd ..
+$ cd ~
+$ cd /
 ```
 - execute cat command
 ```
 $: cat $(path to file)
 ```
-
-- ~~redirect and pipe~~(worked in older version)
+- redirect
+```
+$ cat < $(some file) | grep
+$ ls > $(file to store the output of ls)
+$ ls >> $(file to store(append) the output of ls)
+```
+* sorry, "()" is not working
 - pipe
 ```
-$: ls | cat | wc -l
+$ ls | cat | wc -l
 ```
-
 - quit
 ```
-$: exit
+$ exit
 ```
-or just press Ctrl + D
+~~or just press Ctrl + D~~
