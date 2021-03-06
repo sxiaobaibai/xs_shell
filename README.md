@@ -38,11 +38,12 @@ $ cat < $(some file) | grep
 $ ls > $(file to store the output of ls)
 $ ls >> $(file to store(append) the output of ls)
 ```
-* sorry, "()" is not working
+
 - pipe
 ```
 $ ls | cat | wc -l
 ```
+sorry, "(", ")" are not working
 - quit
 ```
 $ exit
